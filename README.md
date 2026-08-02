@@ -9,6 +9,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that pr
 | `get_forecast` | Current weather + 5-day forecast for any location by latitude/longitude |
 | `get_india_city_forecast` | Current weather + 5-day forecast for a named Indian metro city |
 | `get_india_weather_alerts` | Scans all Indian metros and returns active severe weather alerts |
+| `share_weather_via_email` | Fetches weather for a city or coordinates and emails a formatted summary to any address |
 
 ### Supported Cities
 
@@ -79,6 +80,24 @@ Once configured, you can ask your AI assistant things like:
 # Watch mode — auto-recompiles on save
 npm run watch
 ```
+
+## Email Setup (for `share_weather_via_email`)
+
+The email tool sends weather summaries via SMTP. Configure it in `~/.cursor/mcp.json` under the `weather` server's `env` block:
+
+```json
+"env": {
+  "SMTP_HOST": "smtp.gmail.com",
+  "SMTP_PORT": "587",
+  "SMTP_USER": "your-gmail@gmail.com",
+  "SMTP_PASS": "your-app-password",
+  "SMTP_FROM": "Weather India MCP <your-gmail@gmail.com>"
+}
+```
+
+**For Gmail:** Generate an [App Password](https://myaccount.google.com/apppasswords) (requires 2FA enabled) and use it as `SMTP_PASS`. Your regular Gmail password will not work.
+
+Works with any SMTP provider — just change `SMTP_HOST` and `SMTP_PORT` accordingly (e.g. Outlook, Zoho, custom SMTP).
 
 ## No API Key Required
 

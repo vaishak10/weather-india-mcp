@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import nodemailer from "nodemailer";
 
 const OPEN_METEO_BASE = "https://api.open-meteo.com/v1";
 const USER_AGENT = "weather-india-mcp/1.0";
@@ -263,6 +264,179 @@ server.registerTool(
       results.join("\n\n");
 
     return { content: [{ type: "text" as const, text }] };
+  }
+);
+
+// ── Email transporter (configured via env variables) ──
+
+function createTransporter() {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!user || !pass) return null;
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: process.env.SMTP_SECURE === "true",
+    auth: { user, pass },
+  });
+}
+
+function buildEmailHtml(subject: string, body: string): string {
+  const rows = body
+    .split("\n")
+    .map((line) => {
+      line = line.trim();
+      if (!line) return "";
+      if (line.startsWith("──") || line.startsWith("⚠️")) {
+        return `<tr><td colspan="2" style="padding:12px 0 4px;font-weight:bold;font-size:15px;border-bottom:1px solid #e5e7eb;color:#1d4ed8">${line}</td></tr>`;
+      }
+      if (line.startsWith("📅")) {
+        return `<tr><td colspan="2" style="padding:10px 0 2px;font-weight:600;color:#374151">${line}</td></tr>`;
+      }
+      if (line.startsWith("🔴")) {
+        return `<tr><td colspan="2" style="padding:8px 0 2px;font-weight:600;color:#dc2626">${line}</td></tr>`;
+      }
+      if (line.startsWith("•") || line.startsWith("   •")) {
+        return `<tr><td style="padding:2px 0 2px 16px;color:#7f1d1d">⚠ ${line.replace(/•\s*/, "")}</td></tr>`;
+      }
+      return `<tr><td style="padding:2px 0;color:#374151">${line}</td></tr>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#f9fafb;margin:0;padding:24px">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#1d4ed8,#0ea5e9);padding:24px 28px">
+      <h1 style="margin:0;color:#fff;font-size:22px">🌦 Weather India Report</h1>
+      <p style="margin:6px 0 0;color:#bfdbfe;font-size:13px">Generated on ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</p>
+    </div>
+    <div style="padding:24px 28px">
+      <table style="width:100%;border-collapse:collapse;font-size:14px">${rows}</table>
+    </div>
+    <div style="padding:14px 28px;background:#f3f4f6;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb">
+      Powered by Open-Meteo · Weather India MCP
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ── Tool 4: Share weather summary via email ──
+
+server.registerTool(
+  "share_weather_via_email",
+  {
+    description:
+      "Fetch weather details for a city or coordinates and send a formatted summary email to a given address. " +
+      "Requires SMTP_USER and SMTP_PASS environment variables to be set. " +
+      "Optionally configure SMTP_HOST (default: smtp.gmail.com), SMTP_PORT (default: 587), SMTP_FROM.",
+    inputSchema: {
+      to: z.string().email().describe("Recipient email address"),
+      city: z
+        .string()
+        .optional()
+        .describe("Indian metro city name (e.g. Mumbai). Use this OR latitude+longitude."),
+      latitude: z
+        .number()
+        .min(-90)
+        .max(90)
+        .optional()
+        .describe("Latitude — used when city is not provided"),
+      longitude: z
+        .number()
+        .min(-180)
+        .max(180)
+        .optional()
+        .describe("Longitude — used when city is not provided"),
+    },
+  },
+  async ({ to, city, latitude, longitude }) => {
+    const transporter = createTransporter();
+    if (!transporter) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: "Email not configured. Please set SMTP_USER and SMTP_PASS environment variables in your MCP config.",
+        }],
+      };
+    }
+
+    let lat: number;
+    let lon: number;
+    let locationLabel: string;
+
+    if (city) {
+      const key = Object.keys(INDIA_METROS).find(
+        (k) => k.toLowerCase() === city.trim().toLowerCase()
+      );
+      if (!key) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `City "${city}" not found. Available cities: ${Object.keys(INDIA_METROS).join(", ")}`,
+          }],
+        };
+      }
+      const info = INDIA_METROS[key];
+      lat = info.lat;
+      lon = info.lon;
+      locationLabel = `${key}, ${info.state}`;
+    } else if (latitude !== undefined && longitude !== undefined) {
+      lat = latitude;
+      lon = longitude;
+      locationLabel = `${lat}, ${lon}`;
+    } else {
+      return {
+        content: [{
+          type: "text" as const,
+          text: "Please provide either a city name or latitude and longitude.",
+        }],
+      };
+    }
+
+    const data = await fetchJSON<any>(buildForecastUrl(lat, lon));
+    if (!data) {
+      return { content: [{ type: "text" as const, text: "Failed to fetch weather data." }] };
+    }
+
+    const current = formatCurrent(data.current, data.current_units);
+    const daily = formatDaily(data.daily, data.daily_units);
+    const { severity, reasons } = assessSeverity(data.current);
+
+    let alertSection = "";
+    if (severity) {
+      alertSection = `\n\n⚠️  WEATHER ALERT [${severity.toUpperCase()}]\n${reasons.map(r => `   • ${r}`).join("\n")}`;
+    }
+
+    const body = `── ${locationLabel} ──\n${current}${alertSection}\n\n── 5-Day Forecast ──\n${daily}`;
+    const subject = `Weather Report: ${locationLabel}${severity ? ` ⚠️ ${severity.toUpperCase()} ALERT` : ""}`;
+
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+        to,
+        subject,
+        text: body,
+        html: buildEmailHtml(subject, body),
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `✅ Weather summary for ${locationLabel} sent successfully to ${to}.`,
+        }],
+      };
+    } catch (err: any) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Failed to send email: ${err?.message ?? String(err)}`,
+        }],
+      };
+    }
   }
 );
 

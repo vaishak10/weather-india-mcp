@@ -12,10 +12,12 @@
   ],
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/nodemailer": "^8.0.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "nodemailer": "^9.0.3",
     "zod": "^4.4.3"
   }
 }
