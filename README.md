@@ -73,6 +73,31 @@ Once configured, you can ask your AI assistant things like:
 - *"Are there any severe weather alerts across Indian cities today?"*
 - *"Give me the 5-day forecast for Chennai."*
 - *"What's the weather at latitude 28.6, longitude 77.2?"*
+- *"Share the Bengaluru weather summary to myemail@gmail.com"*
+
+## Demo
+
+### 1. City Forecast — `get_india_city_forecast`
+
+Ask for the weather in any supported Indian city and get current conditions plus a structured 5-day forecast.
+
+![City forecast for Bengaluru](assets/forecast-city.png)
+
+---
+
+### 2. Email Sharing — `share_weather_via_email`
+
+Ask the assistant to share weather details to an email address. It fetches live data and dispatches a formatted summary instantly.
+
+![Email share prompt in Cursor](assets/share-email-prompt.png)
+
+---
+
+### 3. Email Received
+
+The recipient gets a clean HTML email with the city name, current conditions, and the full 5-day forecast — including any active weather alerts in the subject line.
+
+![Weather email in Gmail inbox](assets/email-received.png)
 
 ## Development
 
