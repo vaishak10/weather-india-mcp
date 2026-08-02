@@ -81,7 +81,7 @@ Once configured, you can ask your AI assistant things like:
 
 Ask for the weather in any supported Indian city and get current conditions plus a structured 5-day forecast.
 
-![City forecast for Bengaluru](assets/forecast-city.png)
+![Email share prompt in Cursor](assets/share-email-prompt.png)
 
 ---
 
@@ -89,7 +89,7 @@ Ask for the weather in any supported Indian city and get current conditions plus
 
 Ask the assistant to share weather details to an email address. It fetches live data and dispatches a formatted summary instantly.
 
-![Email share prompt in Cursor](assets/share-email-prompt.png)
+![Weather email in Gmail inbox](assets/email-received.png)
 
 ---
 
@@ -97,7 +97,7 @@ Ask the assistant to share weather details to an email address. It fetches live 
 
 The recipient gets a clean HTML email with the city name, current conditions, and the full 5-day forecast — including any active weather alerts in the subject line.
 
-![Weather email in Gmail inbox](assets/email-received.png)
+![City forecast for Bengaluru](assets/forecast-city.png)
 
 ## Development
 
